@@ -32,6 +32,7 @@ import zipkin2.codec.SpanBytesEncoder;
 import zipkin2.elasticsearch.internal.HttpBulkIndexer;
 import zipkin2.elasticsearch.internal.IndexNameFormatter;
 import zipkin2.internal.DelayLimiter;
+import zipkin2.internal.Nullable;
 import zipkin2.storage.SpanConsumer;
 
 import static zipkin2.elasticsearch.ElasticsearchAutocompleteTags.AUTOCOMPLETE;
@@ -47,6 +48,7 @@ class ElasticsearchSpanConsumer implements SpanConsumer { // not final for testi
   final ElasticsearchStorage es;
   final Set<String> autocompleteKeys;
   final IndexNameFormatter indexNameFormatter;
+  final char indexTypeDelimiter;
   final boolean searchEnabled;
   final DelayLimiter<AutocompleteContext> delayLimiter;
 
@@ -54,10 +56,16 @@ class ElasticsearchSpanConsumer implements SpanConsumer { // not final for testi
     this.es = es;
     this.autocompleteKeys = new LinkedHashSet<>(es.autocompleteKeys());
     this.indexNameFormatter = es.indexNameFormatter();
+    this.indexTypeDelimiter = es.indexTypeDelimiter();
     this.searchEnabled = es.searchEnabled();
     this.delayLimiter = DelayLimiter.newBuilder()
       .ttl(es.autocompleteTtl())
       .cardinality(es.autocompleteCardinality()).build();
+  }
+
+  String formatTypeAndTimestampForInsert(String type, long timestampMillis) {
+    return indexNameFormatter.formatTypeAndTimestampForInsert(type, indexTypeDelimiter,
+      timestampMillis);
   }
 
   @Override public Call<Void> accept(List<Span> spans) {
@@ -101,8 +109,7 @@ class ElasticsearchSpanConsumer implements SpanConsumer { // not final for testi
     }
 
     void add(long indexTimestamp, Span span, long timestampMillis) {
-      String index = consumer.indexNameFormatter
-        .formatTypeAndTimestamp(SPAN, indexTimestamp);
+      String index = consumer.formatTypeAndTimestampForInsert(SPAN, indexTimestamp);
       byte[] document = consumer.searchEnabled
         ? prefixWithTimestampMillisAndQuery(span, timestampMillis)
         : SpanBytesEncoder.JSON_V2.encode(span);
@@ -110,7 +117,7 @@ class ElasticsearchSpanConsumer implements SpanConsumer { // not final for testi
     }
 
     void addAutocompleteValues(long indexTimestamp, Span span) {
-      String idx = consumer.indexNameFormatter.formatTypeAndTimestamp(AUTOCOMPLETE, indexTimestamp);
+      String idx = consumer.formatTypeAndTimestampForInsert(AUTOCOMPLETE, indexTimestamp);
       for (Map.Entry<String, String> tag : span.tags().entrySet()) {
         int length = tag.getKey().length() + tag.getValue().length() + 1;
         if (length > INDEX_CHARS_LIMIT) continue;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -154,12 +154,19 @@ public abstract class IndexNameFormatter {
     return result;
   }
 
+  /** On insert, require a version-specific index-type delimiter as ES 7+ dropped colons */
+  public String formatTypeAndTimestampForInsert(String type, char delimiter, long timestampMillis) {
+    return index() + delimiter + type + '-' + dateFormat().get().format(new Date(timestampMillis));
+  }
+
   public String formatTypeAndTimestamp(@Nullable String type, long timestampMillis) {
     return prefix(type) + "-" + dateFormat().get().format(new Date(timestampMillis));
   }
 
   private String prefix(@Nullable String type) {
-    return type != null ? index() + ":" + type : index();
+    // We use single-character wildcard here in order to read both : and - as starting in ES 7, :
+    // is no longer permitted.
+    return type != null ? index() + "*" + type : index();
   }
 
   // for testing

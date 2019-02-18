@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -24,8 +24,8 @@ import zipkin2.elasticsearch.internal.HttpBulkIndexer;
 public class InternalForTests {
   public static void writeDependencyLinks(ElasticsearchStorage es, List<DependencyLink> links,
     long midnightUTC) {
-    String index =
-      es.indexNameFormatter().formatTypeAndTimestamp("dependency", midnightUTC);
+    String index = ((ElasticsearchSpanConsumer) es.spanConsumer())
+      .formatTypeAndTimestampForInsert("dependency", midnightUTC);
     HttpBulkIndexer indexer = new HttpBulkIndexer("indexlinks", es);
     for (DependencyLink link : links) {
       byte[] document = DependencyLinkBytesEncoder.JSON_V1.encode(link);
